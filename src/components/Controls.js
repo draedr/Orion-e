@@ -4,7 +4,7 @@ import { ServerContext } from './../observables/Server';
 
 import Logo from './Logo';
 
-import { Container, Box, Grid, Button, ButtonGroup, Snackbar, Alert, Card, CardContent, Typography, IconButton, FormControl, Select, MenuItem, TextField, Tabs, Tab, Switch } from '@mui/material';
+import { ToggleButtonGroup, ToggleButton, Box, Grid, Button, ButtonGroup, Snackbar, Alert, Card, CardContent, Typography, IconButton, FormControl, Select, MenuItem, TextField, Tabs, Tab, Switch } from '@mui/material';
 import { DatePicker } from '@mui/lab';
 import MenuOpenIcon from '@mui/icons-material/MenuOpen';
 import { TabPanel, a11yProps } from './TabPanel';
@@ -14,6 +14,7 @@ var tabId = "control-tab";
 const Controls = observer(() => {
     const server = useContext(ServerContext);
     const [tabIndex, setTabIndex] = React.useState(0);
+    const [plotIndex, setPlotIndex] = React.useState(0);
 
     const handleUserChange = (event) => {
         const value = event.target.value;
@@ -74,9 +75,19 @@ const Controls = observer(() => {
 
     const handleTabChange = (event, newValue) => {
         setTabIndex(newValue);
-    };
+    }
     const handleSnackClose = (event) => {
         server.closeSnack();
+    }
+    const changePlot = (id) => {
+        console.log(id);
+        if( !server.connected ) {
+            server.openSnack("Not connected to a Traccar server.", "error");
+        }
+
+        if ( server.plotType != id ) {
+            server.plotType = id;
+        }
     }
 
     return (
@@ -97,7 +108,7 @@ const Controls = observer(() => {
                     <CardContent>
                         <Tabs value={tabIndex} onChange={handleTabChange} aria-label="Control Tabs" variant="fullWidth" centered>
                             <Tab label="Server" {...a11yProps(0, tabId)} />
-                            <Tab label="Visualize" {...a11yProps(1, tabId)} disabled={!server.connected} />
+                            <Tab label="Visualize" {...a11yProps(1, tabId)}/>
                         </Tabs>
 
                         {/* Server Tab */}
@@ -141,13 +152,13 @@ const Controls = observer(() => {
                                         <Typography sx={{ mb: 2 }} variant="caption" color="text.secondary">Use HTTPS to talk with the server</Typography>
                                         <Switch checked={server.useHttps} onChange={handleUseHttpsChange} name={server.useHttps ? "HTTPS" : "HTTP"} inputProps={{ 'aria-label': 'controlled' }} />
                                     </Grid>
+                                    <Grid item xs={12}>
+                                        <ButtonGroup sx={{ width: "100%" }} variant="text" aria-label="text button group">
+                                            <Button sx={{ width: "100%" }} onClick={async () => server.connectAndFetch()}>Connect</Button>
+                                            <Button sx={{ width: "100%" }} onClick={() => server.reset()}>Reset</Button>
+                                        </ButtonGroup>
+                                    </Grid>
                                 </Grid>
-                                <Box sx={{ mt: 4 }}>
-                                    <ButtonGroup sx={{ width: "100%" }} variant="text" aria-label="text button group">
-                                        <Button sx={{ width: "100%" }} onClick={async () => server.connectAndFetch()}>Connect</Button>
-                                        <Button sx={{ width: "100%" }} onClick={() => server.reset()}>Reset</Button>
-                                    </ButtonGroup>
-                                </Box>
                             </CardContent>
                         </TabPanel>
 
@@ -208,6 +219,21 @@ const Controls = observer(() => {
                                                 renderInput={(params) => <TextField {...params} />}
                                             />
                                         </FormControl>
+                                    </Grid>
+                                    <Grid item xs={12}>
+                                        <Typography variant="body2" color="text.secondary">Location Representation</Typography>
+                                        <Typography variant="caption" color="text.secondary">Choose how location data is displayed on the map</Typography>
+
+                                        <ToggleButtonGroup
+                                        sx={{ width: "100%", mt: 2 }}
+                                        color="primary"
+                                        value={server.plotType}
+                                        exclusive
+                                        >
+                                            <ToggleButton sx={{ width: "100%" }} onClick={() => changePlot(0)} value={0}>Dots</ToggleButton>
+                                            <ToggleButton sx={{ width: "100%" }} onClick={() => changePlot(1)} value={1}>Lines</ToggleButton>
+                                            <ToggleButton sx={{ width: "100%" }} onClick={() => changePlot(2)} value={2}>Heatmap</ToggleButton>
+                                        </ToggleButtonGroup>
                                     </Grid>
                                 </Grid>
                             </CardContent>

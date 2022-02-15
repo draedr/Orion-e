@@ -19,7 +19,7 @@ export class Server {
     snackMessage = ""
     snackStyle = "info"
     
-    server = null;
+    plotType = 0;
     users = []
     selectedUser = '';
     devices = []
@@ -77,6 +77,8 @@ export class Server {
     get positionsChanged() { return this._positionsChanged; } 
     set positionsChanged(newValue) { this._positionsChanged = newValue; }
 
+    get plotType() { return this._plotType; } 
+    set plotType(newValue) { this._plotType = newValue; }
     get users() { return this._users; } 
     set users(newValue) { this._users = newValue; }
     get selectedUser() { return this._selectedUser; } 
@@ -174,6 +176,11 @@ export class Server {
     }
 
     fetchUsers = () => {
+        if( !this.connected ) {
+            this.openSnack("Not connected to a Traccar server.", "error");
+            return;
+        }
+
         if( this.userIsAdmin )
             return axios
             .get(this.buildQuery('users'), {}, {auth: { username: this.username, password: this.password}})
@@ -191,6 +198,11 @@ export class Server {
     }
 
     fetchUserDevices = () => {
+        if( !this.connected ) {
+            this.openSnack("Not connected to a Traccar server.", "error");
+            return;
+        }
+
         return axios({
             method: "get",
             url: `${this.buildQuery('/devices')}?userId=${this.getSelectedUser().id}`,
@@ -206,6 +218,11 @@ export class Server {
     }
 
     fetchDevicePositions = () => {
+        if( !this.connected ) {
+            this.openSnack("Not connected to a Traccar server.", "error");
+            return;
+        }
+        
         var startDate = this.startDate != null ? '&from=' + moment(this.startDate).toISOString() : '';
         var endDate = this.endDate != null ? '&to=' + moment(this.endDate).toISOString() : '';
         return axios({
@@ -217,11 +234,8 @@ export class Server {
             this.openSnack("Couldn't fetch devices list.", "error")
         })
         .then(response => {
-            if( response.data !== this.positions ) {
-                console.log(response.data);
-                this.positions = response.data;
-                this.positionsChanged = !this.positionsChanged;
-            }
+            this.positions = response.data;
+            this.positionsChanged = !this.positionsChanged;
             this.openSnack(`Found ${ this.positions.length } positions`, "info")
         });
     }
@@ -229,8 +243,9 @@ export class Server {
     connectAndFetch = async () => {
         if ( !this.connected )
             await this.connect();
-
-        this.fetchUsers();        
+        
+        if( this.connected )       
+            this.fetchUsers();        
     }    
 }
 

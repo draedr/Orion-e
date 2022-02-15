@@ -12,7 +12,7 @@ const App = observer(() => {
     const server = useContext(ServerContext);
     return (
       <div className="App">
-        <LocationMap />
+        <LocationMap/>
         <Controls />
       </div>
   )});
