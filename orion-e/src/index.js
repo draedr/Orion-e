@@ -12,12 +12,17 @@ import '@fontsource/roboto/700.css';
 
 import { ServerContext, Server } from './observables/Server';
 
+import { LocalizationProvider } from '@mui/lab';
+import DateAdapter from '@mui/lab/AdapterMoment';
+
 ReactDOM.render(
-  <ServerContext.Provider value={new Server()}>
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  </ServerContext.Provider>,
+  <LocalizationProvider dateAdapter={DateAdapter}>
+    <ServerContext.Provider value={new Server()}>
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
+    </ServerContext.Provider>
+  </LocalizationProvider>,
   document.getElementById('root')
 );
 

@@ -2,6 +2,7 @@
 import {createContext} from 'react';
 import { makeAutoObservable } from "mobx";
 import axios from 'axios';
+import moment from 'moment';
 
 export class Server {
     url = "demo3.traccar.org"
@@ -17,14 +18,16 @@ export class Server {
     snackOpen = false
     snackMessage = ""
     snackStyle = "info"
-
+    
     server = null;
     users = []
     selectedUser = '';
     devices = []
     selectedDevice = '';
-    startDate = null
-    endDate = null
+    startDate = null;
+    endDate = null;
+    positions = [];
+    positionsChanged = false;
 
     constructor () {
         makeAutoObservable(this);
@@ -34,39 +37,58 @@ export class Server {
     ** Getter and Setters
     */
 
-    get url() { return this._url; } set url(newValue) { this._url = newValue.trim(); }
-    get username() { return this._username; } set username(newValue) { this._username = newValue.trim(); }
-    get password() { return this._password; } set password(newValue) { this._password = newValue.trim(); }
-    get useHttps() { return this._useHttps; } set useHttps(newValue) { this._useHttps = newValue; }
+    get url() { return this._url; } 
+    set url(newValue) { this._url = newValue.trim(); }
+    get username() { return this._username; } 
+    set username(newValue) { this._username = newValue.trim(); }
+    get password() { return this._password; } 
+    set password(newValue) { this._password = newValue.trim(); }
+    get useHttps() { return this._useHttps; } 
+    set useHttps(newValue) { this._useHttps = newValue; }
     
-    get connected() { return this._connected; } set connected(newValue) { this._connected = newValue; }
-    get userId() { return this._userId; } set userId(newValue) { this._userId = newValue; }
-    get userName() { return this._userName; } set userName(newValue) { this._userName = newValue; }
-    get userIsAdmin() { return this._userIsAdmin; } set userIsAdmin(newValue) { this._userIsAdmin = newValue; }
+    get connected() { return this._connected; } 
+    set connected(newValue) { this._connected = newValue; }
+    get userId() { return this._userId; } 
+    set userId(newValue) { this._userId = newValue; }
+    get userName() { return this._userName; } 
+    set userName(newValue) { this._userName = newValue; }
+    get userIsAdmin() { return this._userIsAdmin; } 
+    set userIsAdmin(newValue) { this._userIsAdmin = newValue; }
 
-        get snackOpen() { return this._snackOpen; } set snackOpen(newValue) { this._snackOpen = newValue; }
-    get snackMessage() { return this._snackMessage; } set snackMessage(newValue) { this._snackMessage = newValue; }
-    get snackStyle() { return this._snackStyle; } set snackStyle(newValue) { 
+    get snackOpen() { return this._snackOpen; } 
+    set snackOpen(newValue) { this._snackOpen = newValue; }
+    get snackMessage() { return this._snackMessage; } 
+    set snackMessage(newValue) { this._snackMessage = newValue; }
+    get snackStyle() { return this._snackStyle; } 
+    set snackStyle(newValue) { 
+
         this._snackStyle = newValue; 
         switch(newValue) {
             case "success":
                 return "success";
-                break;
             case "warning":
                 return "warning";
-                break;
             case "info":
                 return "info";
-                break;
             default:
                 return "info"
         }
     }
+    get positionsChanged() { return this._positionsChanged; } 
+    set positionsChanged(newValue) { this._positionsChanged = newValue; }
 
-    get selectedUser() { return this._selectedUser; } set selectedUser(newValue) { this._selectedUser = newValue.trim(); }
-    get selectedDevice() { return this._selectedDevice; } set selectedDevice(newValue) { this._selectedDevice = newValue.trim(); }
-    get startDate() { return this._startDate; } set startDate(newValue) { this._startDate = newValue; }
-    get endDate() { return this._endDate; } set endDate(newValue) { this._endDate = newValue; }
+    get users() { return this._users; } 
+    set users(newValue) { this._users = newValue; }
+    get selectedUser() { return this._selectedUser; } 
+    set selectedUser(newValue) { this._selectedUser = newValue; }
+    get devices() { return this._devices; } 
+    set devices(newValue) { this._devices = newValue; }
+    get selectedDevice() { return this._selectedDevice; } 
+    set selectedDevice(newValue) { this._selectedDevice = newValue; }
+    get startDate() { return this._startDate; } 
+    set startDate(newValue) { this._startDate = newValue; }
+    get endDate() { return this._endDate; } 
+    set endDate(newValue) { this._endDate = newValue; }
 
     /*
     ** Methods
@@ -87,9 +109,15 @@ export class Server {
         this.endDate = null;
     }
 
-    buildQuery = (path) => { return `${this.useHttps ? 'https' : 'http' }://${this.url}/api/${path}` }
+    buildQuery = (path) => { 
+        var safePath = path[0] === '/' ? path.slice(1) : path;
+        return `${this.useHttps ? 'https' : 'http' }://${this.url}/api/${safePath}`;
+}
 
     openSnack = (message, style = "info") => {
+        if(this.snackOpen)
+            this.snackOpen = false;
+
         this.snackStyle = style;
         this.snackMessage = message;
         this.snackOpen = true;
@@ -109,6 +137,10 @@ export class Server {
         return this.users[ this.selectedUser ];
     }
 
+    getSelectedDevice = () => {
+        return this.devices[ this.selectedDevice ];
+    }
+
     connect = () => {
         this.connected = false;
         return axios
@@ -117,7 +149,6 @@ export class Server {
                 this.openSnack("Couldn't connect to Traccar server.", "error")
             })
             .then(response => {
-                console.log(response);
                 this.connected = true;
                 this.openSnack("Successfully connected to Traccar server.", "success")
             })
@@ -135,8 +166,6 @@ export class Server {
                         this.openSnack("Couldn't get user data.", "error")
                     })
                     .then(response => {
-                        console.log(response);
-                                                
                         this.userId = response.data.id;
                         this.userName = response.data.name;
                         this.userIsAdmin = response.data.administrator;
@@ -144,21 +173,15 @@ export class Server {
                 );
     }
 
-    fetchUsers = (handleSnackOpen) => {
+    fetchUsers = () => {
         if( this.userIsAdmin )
             return axios
-            .get(this.buildQuery('users'), {}, this.buildOpts())
+            .get(this.buildQuery('users'), {}, {auth: { username: this.username, password: this.password}})
             .catch((error) => {
                 this.openSnack("Couldn't fetch user list.", "error")
             })
             .then(response => {
-                console.log(response);
-                this.users = response.data.map(user => {
-                    return {
-                        id: user.id,
-                        name: user.name
-                    };
-                });
+                this.users = response.data;
             });
         else
             this.users.push({
@@ -167,20 +190,39 @@ export class Server {
             });
     }
 
-    fetchUserDevices = (handleSnackOpen) => {
-        return axios
-        .get(this.buildQuery('devices'), {userId: this.getSelectedUser()}, this.buildOpts())
+    fetchUserDevices = () => {
+        return axios({
+            method: "get",
+            url: `${this.buildQuery('/devices')}?userId=${this.getSelectedUser().id}`,
+            auth: { username: this.username, password: this.password }
+          })
         .catch((error) => {
             this.openSnack("Couldn't fetch devices list.", "error")
         })
         .then(response => {
-            console.log(response);
-            this.devices = response.data.map(device => {
-                return {
-                    id: device.id,
-                    name: device.name
-                };
-            });
+            this.devices = response.data;
+            this.openSnack(`Found ${ this.devices.length } devices`, "info")
+        });
+    }
+
+    fetchDevicePositions = () => {
+        var startDate = this.startDate != null ? '&from=' + moment(this.startDate).toISOString() : '';
+        var endDate = this.endDate != null ? '&to=' + moment(this.endDate).toISOString() : '';
+        return axios({
+            method: "get",
+            url: `${this.buildQuery('/positions')}?deviceId=${this.getSelectedDevice().id}${startDate}${endDate}`,
+            auth: { username: this.username, password: this.password }
+          })
+        .catch((error) => {
+            this.openSnack("Couldn't fetch devices list.", "error")
+        })
+        .then(response => {
+            if( response.data !== this.positions ) {
+                console.log(response.data);
+                this.positions = response.data;
+                this.positionsChanged = !this.positionsChanged;
+            }
+            this.openSnack(`Found ${ this.positions.length } positions`, "info")
         });
     }
 
