@@ -1,15 +1,25 @@
 import React, { useContext, useState, useEffect } from 'react';
 import { ServerContext } from './../observables/Server';
 import { observer } from 'mobx-react-lite'
-import { ScatterplotLayer, LineLayer } from '@deck.gl/layers';
+import { ScatterplotLayer } from '@deck.gl/layers';
 import {HeatmapLayer} from '@deck.gl/aggregation-layers';
+import {TripsLayer} from '@deck.gl/geo-layers';
 
 import { Map } from '@esri/react-arcgis';
 import { loadArcGISModules } from '@deck.gl/arcgis';
 import moment from 'moment';
 
+import { Settings } from './../settings';
+import colors from './../styles/plotColors.json';
+
+const getColors = () => {
+  if(Settings.theme)
+    return colors[Settings.theme];
+  else
+    return colors["heatmap"];
+}
+
 const getScatterplotLayer = (data) => {
-  console.log("Rendering Scatterplot Layer");
   return new ScatterplotLayer({
     id: 'scatterplot-layer',
     data: data,
@@ -18,14 +28,15 @@ const getScatterplotLayer = (data) => {
     stroked: false,
     filled: true,
     radiusScale: 10,
+    radiusMinPixels: 10,
+    radiusMaxPixels: 100,
     getPosition: d => [d.longitude, d.latitude],
-    getFillColor: d => [59, 149, 204, 130],
+    getFillColor: d => getColors()[4],
     getLineColor: d => [0, 0, 0, 0]
   })
 }
 
 const getHeatmapLayer = (data) => {
-  console.log("Rendering Heatmap Layer");
   return new HeatmapLayer({
     id: 'heatmap-layer',
     data: data,
@@ -33,32 +44,27 @@ const getHeatmapLayer = (data) => {
     getPosition: d => [d.longitude, d.latitude],
     getWeight: d => moment(d.fixTime).unix(),
     aggregation: 'SUM',
-    colorRange: [
-      [241,238,246,255],
-      [208,209,230,255],
-      [166,189,219,255],
-      [116,169,207,255],
-      [43,140,190,255],
-      [4,90,141,255]
-    ]
+    colorRange: getColors()
   });
 }
 
-const getLinesLayer = (data) => {
-  console.log("Rendering Lines Layer");
-  return new LineLayer({
-    id: 'line-layer',
+const getLinesLayer = (data, startDate) => {
+  return new TripsLayer({
+    id: 'trips-layer',
     data,
-    getWidth: 2,
-    getSourcePosition: d => [d.source.longitude, d.source.latitude],
-    getTargetPosition: d => [d.target.longitude, d.target.latitude],
-    getColor: d => {
-      const z = d.start[2];
-      const r = z / 10000;
-    
-      return [255 * (1 - r * 2), 128 * r, 255 * r, 255 * (1 - r)];
-    }    
+    getPath: d => d.waypoints.map(p => [p.longitude, p.latitude]),
+    // deduct start timestamp from each data point to avoid overflow
+    getTimestamps: d => d.waypoints.map(p => moment(p.fixTime).unix() - startDate ),
+    getColor: getColors()[4],
+    widthMinPixels: 3,
+    fadeTrail: false,
+    trailLength: 200,
+    capRounded: true,
+    jointRounded: true,
+    currentTime: moment().unix() - startDate
   });
+
+  
 }
 
 export const LocationMap = observer(() => {
@@ -92,16 +98,19 @@ export const LocationMap = observer(() => {
       layers = [ getHeatmapLayer(server.positions) ];
       break;
     case 2:
-      var compiled = server.positions.map((currentValue, currentIndex) => {
-        if( currentIndex < server.positions.length )
-          return {
-            source: server.positions[currentIndex],
-            target: server.positions[currentIndex + 1]
+      var compiled = [{
+        waypoints: []
+      }]
+      
+      for(var i = 0; i < server.positions.length; i++) {
+        if( i !== 0 ) {
+          if( !moment(server.positions[i].fixTime).isSame(moment(compiled[compiled.length -1].waypoints.fixTime), 'date')) {
+            compiled.push({ waypoints: [] });
           }
-      });
-
-      compiled.pop();
-      layers = [ getLinesLayer(compiled) ];
+        }
+        compiled[compiled.length -1].waypoints.push({...server.positions[i]});
+      }
+      layers = [ getLinesLayer(compiled, moment(server.startDate).unix() ) ];
       break;
     default:
       layers = [ getScatterplotLayer(server.positions) ];
@@ -111,7 +120,9 @@ export const LocationMap = observer(() => {
   return (
     <Map
       key="map-arcgis"
-      mapProperties={{ basemap: 'dark-gray-vector' }}
+      mapProperties={{ 
+        basemap: 'dark-gray-vector'
+      }}
       viewProperties={{
         center: [10.4496693, 44.7013056],
         zoom: 14

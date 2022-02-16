@@ -4,13 +4,16 @@ import { makeAutoObservable } from "mobx";
 import axios from 'axios';
 import moment from 'moment';
 
+import { Settings } from './../settings';
+
 export class Server {
-    url = "demo3.traccar.org"
-    username = "manuel@felines.space"
-    password = "manuel"
-    useHttps = true
+    url = Settings.url
+    username = Settings.username
+    password = Settings.password
+    useHttps = Settings.useHttps
 
     connected = false
+    connecting = false
     userId = null
     userName = ""
     userIsAdmin = false
@@ -21,11 +24,11 @@ export class Server {
     
     plotType = 0;
     users = []
-    selectedUser = '';
+    selectedUser = Settings.defaultUser;
     devices = []
-    selectedDevice = '';
-    startDate = null;
-    endDate = null;
+    selectedDevice = Settings.defaultDevice;
+    startDate = moment().subtract(1, 'days').format();
+    endDate = moment().add(1, 'days').format();
     positions = [];
     positionsChanged = false;
 
@@ -38,16 +41,18 @@ export class Server {
     */
 
     get url() { return this._url; } 
-    set url(newValue) { this._url = newValue.trim(); }
+    set url(newValue) { this._url = newValue; }
     get username() { return this._username; } 
-    set username(newValue) { this._username = newValue.trim(); }
+    set username(newValue) { this._username = newValue; }
     get password() { return this._password; } 
-    set password(newValue) { this._password = newValue.trim(); }
+    set password(newValue) { this._password = newValue; }
     get useHttps() { return this._useHttps; } 
     set useHttps(newValue) { this._useHttps = newValue; }
     
     get connected() { return this._connected; } 
     set connected(newValue) { this._connected = newValue; }
+    get connecting() { return this._connecting; } 
+    set connecting(newValue) { this._connecting = newValue; }
     get userId() { return this._userId; } 
     set userId(newValue) { this._userId = newValue; }
     get userName() { return this._userName; } 
@@ -81,11 +86,21 @@ export class Server {
     set plotType(newValue) { this._plotType = newValue; }
     get users() { return this._users; } 
     set users(newValue) { this._users = newValue; }
-    get selectedUser() { return this._selectedUser; } 
+    get selectedUser() { 
+        if( this.users.length == 0)
+            return '';
+        else
+            return this._selectedUser; 
+    } 
     set selectedUser(newValue) { this._selectedUser = newValue; }
     get devices() { return this._devices; } 
     set devices(newValue) { this._devices = newValue; }
-    get selectedDevice() { return this._selectedDevice; } 
+    get selectedDevice() { 
+        if( this.devices.length == 0)
+            return '';
+        else
+            return this._selectedDevice; 
+    } 
     set selectedDevice(newValue) { this._selectedDevice = newValue; }
     get startDate() { return this._startDate; } 
     set startDate(newValue) { this._startDate = newValue; }
@@ -96,19 +111,50 @@ export class Server {
     ** Methods
     */
 
-    reset = () => {
-        this.url = "demo4.traccar.org";
-        this.username = "manuel@felines.space";
-        this.password = "manuel";
-        this.useHttps = true;
-        this.successful = false;
-        this.server = null;
-        this.users = [];
+    resetAll = () => {
+        this.url = "demo4.traccar.org"
+        this.username = "manuel@felines.space"
+        this.password = "manuel"
+        this.useHttps = true
+    
+        this.connected = false
+        this.connecting = false
+        this.userId = null
+        this.userName = ""
+        this.userIsAdmin = false
+    
+        this.snackOpen = false
+        this.snackMessage = ""
+        this.snackStyle = "info"
+        
+        this.plotType = 0;
+        this.users = []
         this.selectedUser = '';
-        this.devices = [];
+        this.devices = []
         this.selectedDevice = '';
-        this.startDate = null;
-        this.endDate = null;
+        this.startDate = moment().subtract(1, 'days').format();
+        this.endDate = moment().add(1, 'days').format();
+        this.positions = [];
+        this.positionsChanged = false;
+    }
+
+    resetQueried = () => {
+        this.connected = false
+        this.userId = null
+        this.userName = ""
+        this.userIsAdmin = false
+    
+        this.snackOpen = false
+        this.snackMessage = ""
+        this.snackStyle = "info"
+        
+        this.plotType = 0;
+        this.users = []
+        this.selectedUser = '';
+        this.devices = []
+        this.selectedDevice = '';
+        this.positions = [];
+        this.positionsChanged = false;
     }
 
     buildQuery = (path) => { 
@@ -116,9 +162,10 @@ export class Server {
         return `${this.useHttps ? 'https' : 'http' }://${this.url}/api/${safePath}`;
 }
 
-    openSnack = (message, style = "info") => {
-        if(this.snackOpen)
+    openSnack = async (message, style = "info") => {
+        if(this.snackOpen) {
             this.snackOpen = false;
+        }
 
         this.snackStyle = style;
         this.snackMessage = message;
@@ -241,8 +288,10 @@ export class Server {
     }
 
     connectAndFetch = async () => {
-        if ( !this.connected )
-            await this.connect();
+        this.resetQueried();
+
+        await this.connect();
+        this.connecting = false;
         
         if( this.connected )       
             this.fetchUsers();        
